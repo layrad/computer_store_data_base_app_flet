@@ -10,9 +10,9 @@ permissions:
   contents: write
 
 env:
-  UV_PYTHON: 3.11
-  PYTHONUTF8: 1
-  FLET_CLI_NO_RICH_OUTPUT: 1
+  UV_PYTHON: "3.11"
+  PYTHONUTF8: "1"
+  FLET_CLI_NO_RICH_OUTPUT: "1"
 
 jobs:
   build:
@@ -24,40 +24,43 @@ jobs:
         include:
           - name: windows
             runner: windows-latest
-            build_cmd: "flet build windows src"
+            build_cmd: "flet build windows src -o build/windows"
             artifact_path: build/dns2-windows-app.zip
 
           - name: apk
             runner: ubuntu-latest
-            build_cmd: "flet build apk src"
+            build_cmd: "flet build apk src -o build/apk"
             artifact_path: build/dns2-android-app.apk
 
     steps:
       - uses: actions/checkout@v4
 
+      - name: Настройка Java (только для Android)
+        if: matrix.name == 'apk'
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'zulu'
+          java-version: '17'
+
       - name: Настройка uv
         uses: astral-sh/setup-uv@v6
-
-      - name: Установка зависимостей
-        run: |
-          uv pip install --system flet requests
 
       - name: Запуск сборки приложения
         shell: bash
         run: |
-          uv run ${{ matrix.build_cmd }} --yes --verbose
+          uv run --with flet --with requests ${{ matrix.build_cmd }} --yes --verbose
 
       - name: Упаковка Windows в ZIP
         if: matrix.name == 'windows'
         shell: pwsh
         run: |
-          Compress-Archive -Path build/windows/* -DestinationPath build/dns2-windows-app.zip
+          Compress-Archive -Path build/windows -DestinationPath build/dns2-windows-app.zip
 
       - name: Переименование APK
         if: matrix.name == 'apk'
         shell: bash
         run: |
-          mv build/apk/app-release.apk build/dns2-android-app.apk
+          mv build/apk/*.apk build/dns2-android-app.apk
 
       - name: Сохранение артефакта
         uses: actions/upload-artifact@v4
