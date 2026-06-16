@@ -1,0 +1,16 @@
+[project]
+name = "dns-2"
+version = "1.1.0"
+description = "Если DNS такой крутой, почему нет DNS 2?"
+dependencies = ["flet", "requests"]
+
+[tool.flet]
+product = "DNS 2"
+company = "DNS 2.0 LLC"
+org = "ru.dns2"
+
+[tool.flet.android]
+package_name = "ru.dns2.app"
+
+[tool.flet.icons]
+android = "assets/icon.png"
