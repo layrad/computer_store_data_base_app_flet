@@ -3,6 +3,8 @@ import json
 import math
 
 BASE_URL = "http://64.188.74.2:8000"
+API_PASSWORD = "7#wY9&rQ4@kM2!pX"
+HEADERS = {"X-API-Key": API_PASSWORD}
 
 _cached_products = []
 _cached_sales = []
@@ -12,7 +14,7 @@ _cached_sales_timestamp = 0.0
 
 def get_last_update() -> float:
     try:
-        resp = requests.get(f"{BASE_URL}/last-update")
+        resp = requests.get(f"{BASE_URL}/last-update", headers=HEADERS)
         if resp.status_code == 200:
             return float(resp.json().get("timestamp", 0.0))
     except:
@@ -26,7 +28,7 @@ def get_products(force_refresh=False) -> list:
 
     if force_refresh or not _cached_products or current_ts > _cached_prod_timestamp:
         try:
-            resp = requests.get(f"{BASE_URL}/products")
+            resp = requests.get(f"{BASE_URL}/products", headers=HEADERS)
             if resp.status_code == 200:
                 _cached_products = resp.json()
                 _cached_prod_timestamp = current_ts
@@ -38,7 +40,7 @@ def get_products(force_refresh=False) -> list:
 def create_product(data: dict) -> bool:
     global _cached_prod_timestamp
     try:
-        resp = requests.post(f"{BASE_URL}/products", json=data)
+        resp = requests.post(f"{BASE_URL}/products", json=data, headers=HEADERS)
         if resp.status_code in (200, 201):
             _cached_prod_timestamp = 0.0
             return True
@@ -50,7 +52,9 @@ def create_product(data: dict) -> bool:
 def update_product(product_id: int, data: dict) -> bool:
     global _cached_prod_timestamp
     try:
-        resp = requests.patch(f"{BASE_URL}/products/{product_id}", json=data)
+        resp = requests.patch(
+            f"{BASE_URL}/products/{product_id}", json=data, headers=HEADERS
+        )
         if resp.status_code == 200:
             _cached_prod_timestamp = 0.0
             return True
@@ -62,7 +66,7 @@ def update_product(product_id: int, data: dict) -> bool:
 def delete_product(product_id: int) -> bool:
     global _cached_prod_timestamp
     try:
-        resp = requests.delete(f"{BASE_URL}/products/{product_id}")
+        resp = requests.delete(f"{BASE_URL}/products/{product_id}", headers=HEADERS)
         if resp.status_code == 204:
             _cached_prod_timestamp = 0.0
             return True
@@ -77,7 +81,7 @@ def get_sales(force_refresh=False) -> list:
 
     if force_refresh or not _cached_sales or current_ts > _cached_sales_timestamp:
         try:
-            resp = requests.get(f"{BASE_URL}/sales")
+            resp = requests.get(f"{BASE_URL}/sales", headers=HEADERS)
             if resp.status_code == 200:
                 _cached_sales = resp.json()
                 _cached_sales_timestamp = current_ts
@@ -89,7 +93,7 @@ def get_sales(force_refresh=False) -> list:
 def create_sale(data: dict) -> bool:
     global _cached_sales_timestamp
     try:
-        resp = requests.post(f"{BASE_URL}/sales", json=data)
+        resp = requests.post(f"{BASE_URL}/sales", json=data, headers=HEADERS)
         if resp.status_code in (200, 201):
             _cached_sales_timestamp = 0.0
             return True
@@ -100,7 +104,9 @@ def create_sale(data: dict) -> bool:
 
 def get_query_vector(query: str) -> list:
     try:
-        resp = requests.get(f"{BASE_URL}/embeddings/query", params={"q": query})
+        resp = requests.get(
+            f"{BASE_URL}/embeddings/query", params={"q": query}, headers=HEADERS
+        )
         if resp.status_code == 200:
             return resp.json().get("vector", [])
     except:
