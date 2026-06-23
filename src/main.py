@@ -9,7 +9,9 @@ def main(page: ft.Page):
     page.window_min_width = 400
     page.window_min_height = 600
 
-    content_area = ft.Container(expand=True)
+    content_area = ft.Container(
+        expand=True, padding=ft.Padding(left=15, top=60, right=15, bottom=15)
+    )
 
     def change_route(e):
         index = e.control.selected_index
@@ -22,11 +24,16 @@ def main(page: ft.Page):
         elif index == 2:
             content_area.content = get_about_view(page)
 
+        menu_container.visible = False
         page.update()
 
     rail = ft.NavigationRail(
         selected_index=0,
         bgcolor="#121212",
+        extended=False,
+        min_width=100,
+        label_type=ft.NavigationRailLabelType.ALL,
+        leading=ft.Container(height=50),
         destinations=[
             ft.NavigationRailDestination(icon=ft.Icons.STORAGE, label="База"),
             ft.NavigationRailDestination(icon=ft.Icons.ANALYTICS, label="Отчеты"),
@@ -35,29 +42,35 @@ def main(page: ft.Page):
         on_change=change_route,
     )
 
-    def adjust_sidebar():
-        if page.width < 600:
-            rail.min_width = 56
-            rail.extended = False
-            rail.label_type = ft.NavigationRailLabelType.NONE
-        else:
-            rail.min_width = 100
-            rail.extended = False
-            rail.label_type = ft.NavigationRailLabelType.ALL
+    menu_container = ft.Container(
+        content=rail,
+        left=0,
+        top=0,
+        bottom=0,
+        width=100,
+        visible=False,
+        shadow=ft.BoxShadow(blur_radius=15, color="#66000000", offset=ft.Offset(3, 0)),
+    )
 
-    def on_resize(e):
-        adjust_sidebar()
+    def toggle_menu(e):
+        menu_container.visible = not menu_container.visible
         page.update()
 
-    page.on_resize = on_resize
-    adjust_sidebar()
+    menu_button = ft.IconButton(
+        icon=ft.Icons.MENU,
+        icon_color=ft.Colors.WHITE,
+        icon_size=28,
+        on_click=toggle_menu,
+        left=10,
+        top=10,
+    )
 
     page.add(
-        ft.Row(
+        ft.Stack(
             [
-                rail,
-                ft.VerticalDivider(width=1, color="#222222"),
                 content_area,
+                menu_container,
+                menu_button,
             ],
             expand=True,
         )
