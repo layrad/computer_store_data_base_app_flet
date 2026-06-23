@@ -115,6 +115,21 @@ def create_sale(data: dict):
     return None
 
 
+def parse_nlp_query(query: str) -> dict:
+    try:
+        resp = session.post(
+            f"{BASE_URL}/sales/parse-query", json={"query": query}, timeout=120
+        )
+        if resp.status_code == 200:
+            return resp.json()
+    except Exception as e:
+        print(f"Ошибка вызова parse-query: {e}")
+    return {
+        "is_valid": False,
+        "error_message": "Не удалось установить соединение с сервером аналитики.",
+    }
+
+
 def get_query_vector(query: str) -> list:
     try:
         resp = session.get(

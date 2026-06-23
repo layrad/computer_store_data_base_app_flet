@@ -2,7 +2,7 @@
 name = "dns-2"
 version = "1.1.0"
 description = "Если DNS такой крутой, почему нет DNS 2?"
-dependencies = ["flet", "requests"]
+dependencies = ["flet", "requests", "fpdf2"]
 
 [tool.flet]
 product = "DNS 2"
