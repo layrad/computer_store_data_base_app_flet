@@ -23,12 +23,12 @@ def get_about_view(page: ft.Page):
                 ft.TextButton(
                     "GitHub проекта",
                     icon=ft.Icons.CODE,
-                    on_click=lambda _: page.launch_url("https://github.com"),
+                    url="https://github.com/layrad/computer_store_data_base_app_flet",
                 ),
                 ft.TextButton(
                     "Сайт приложения",
                     icon=ft.Icons.WEB,
-                    on_click=lambda _: page.launch_url("http://localhost"),
+                    url="http://64.188.74.2:5173/",
                 ),
             ],
         ),
