@@ -47,7 +47,7 @@ jobs:
         if: matrix.name == 'windows'
         shell: pwsh
         run: |
-          uv run --with "flet[desktop]" --with pandas --with openpyxl --with "pyinstaller==6.3.0" pyinstaller --noconsole --onefile --collect-all flet --collect-all flet_desktop --add-data "site.html;." --name "dns2-windows-app" main.py
+          uv run --with "flet[desktop]" --with pandas --with openpyxl --with pillow --with "pyinstaller==6.3.0" pyinstaller --noconsole --onefile --collect-all flet --collect-all flet_desktop --add-data "src/site.html;." --name "dns2-windows-app" src/main.py
           
           New-Item -ItemType Directory -Force -Path build
           Compress-Archive -Path dist/dns2-windows-app.exe -DestinationPath build/dns2-windows-app.zip
