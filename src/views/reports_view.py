@@ -112,39 +112,55 @@ def save_as_pdf(file_path: str, text_content: str):
     pdf.output(file_path)
 
 
+class MenuDropdownHolder:
+    def __init__(self, menu_control):
+        self.value = None
+        self.menu_control = menu_control
+
+    @property
+    def disabled(self):
+        return self.menu_control.disabled
+
+    @disabled.setter
+    def disabled(self, val):
+        self.menu_control.disabled = val
+
+
 def get_reports_view(page: ft.Page):
     if page.fonts is None:
         page.fonts = {}
     page.fonts["CyrillicMono"] = "Consolas.ttf"
     page.update()
 
-    options = [
-        "1. ABC-анализ продаж (по выручке)",
-        "2. XYZ-анализ стабильности спроса",
-        "3. Рейтинг эффективности продавцов",
-        "4. Анализ продаж по категориям товаров",
-        "5. Динамика продаж по месяцам",
-        "6. Анализ прибыльности по брендам",
-        "7. Анализ возвратов и отмен",
-        "8. Популярность типов оплаты",
-        "9. ABC-анализ по количеству сделок",
-        "10. Анализ ценовых диапазонов",
-        "11. Продажи по дням недели",
-        "12. Товары с критически низким запасом",
-        "13. Анализ скидок и упущенной выгоды",
-        "14. Анализ гарантийного риска (Возвраты по категориям)",
-        "15. Топ-10 самых дорогих единичных продаж",
-        "Свой вариант...",
-    ]
+    report_structure = {
+        "Анализ продаж и спроса": [
+            "1. ABC-анализ продаж (по выручке)",
+            "2. XYZ-анализ стабильности спроса",
+            "4. Анализ продаж по категориям товаров",
+            "5. Динамика продаж по месяцам",
+            "9. ABC-анализ по количеству сделок",
+            "11. Продажи по дням недели",
+            "15. Топ-10 самых дорогих единичных продаж",
+        ],
+        "Финансы и эффективность": [
+            "3. Рейтинг эффективности продавцов",
+            "6. Анализ прибыльности по брендам",
+            "7. Анализ возвратов и отмен",
+            "8. Популярность типов оплаты",
+            "10. Анализ ценовых диапазонов",
+            "13. Анализ скидок и упущенной выгоды",
+            "14. Анализ гарантийного риска (Возвраты по категориям)",
+        ],
+        "Склад и ИИ": [
+            "12. Товары с критически низким запасом",
+            "Свой вариант...",
+        ],
+    }
 
     last_report_text = [""]
 
-    dropdown = ft.Dropdown(
-        options=[ft.dropdown.Option(text=opt) for opt in options],
-        width=400,
-        hint_text="Выберите тип отчета",
-        border_color="#333333",
-        color="#FFFFFF",
+    selected_report_text = ft.Text(
+        "Отчет не выбран", size=14, color="#A0A0A0", weight=ft.FontWeight.W_500
     )
 
     custom_input = ft.TextField(
@@ -153,6 +169,57 @@ def get_reports_view(page: ft.Page):
         hint_text="Например: 'Какой продавец продал больше всего видеокарт в декабре?'",
         border_color="#333333",
     )
+
+    def on_menu_item_click(e):
+        chosen = e.control.data
+        dropdown.value = chosen
+        selected_report_text.value = f"Выбран: {chosen}"
+        selected_report_text.color = "#FFFFFF"
+        custom_input.visible = chosen == "Свой вариант..."
+        page.update()
+
+    menu_items_sales = [
+        ft.MenuItemButton(
+            content=ft.Text(opt), on_click=on_menu_item_click, data=opt
+        )
+        for opt in report_structure["Анализ продаж и спроса"]
+    ]
+    menu_items_finance = [
+        ft.MenuItemButton(
+            content=ft.Text(opt), on_click=on_menu_item_click, data=opt
+        )
+        for opt in report_structure["Финансы и эффективность"]
+    ]
+    menu_items_stock = [
+        ft.MenuItemButton(
+            content=ft.Text(opt), on_click=on_menu_item_click, data=opt
+        )
+        for opt in report_structure["Склад и ИИ"]
+    ]
+
+    menu_bar = ft.MenuBar(
+        expand=False,
+        controls=[
+            ft.SubmenuButton(
+                content=ft.Text("Открыть список отчетов", color="#FFFFFF"),
+                controls=[
+                    ft.SubmenuButton(
+                        content=ft.Text("Анализ продаж и спроса"),
+                        controls=menu_items_sales,
+                    ),
+                    ft.SubmenuButton(
+                        content=ft.Text("Финансы и эффективность"),
+                        controls=menu_items_finance,
+                    ),
+                    ft.SubmenuButton(
+                        content=ft.Text("Склад и ИИ"), controls=menu_items_stock
+                    ),
+                ],
+            )
+        ],
+    )
+
+    dropdown = MenuDropdownHolder(menu_bar)
 
     generate_btn = ft.ElevatedButton(
         "Составить отчет",
@@ -179,7 +246,10 @@ def get_reports_view(page: ft.Page):
         try:
             page._services.append(file_picker)
         except:
-            page.overlay.append(file_picker)
+            try:
+                page.overlay.append(file_picker)
+            except:
+                pass
 
     async def on_save_txt_click(e):
         if not last_report_text[0]:
@@ -231,12 +301,6 @@ def get_reports_view(page: ft.Page):
         on_click=on_save_pdf_click,
     )
 
-    def on_dropdown_change(e):
-        custom_input.visible = dropdown.value == "Свой вариант..."
-        custom_input.update()
-
-    dropdown.on_select = on_dropdown_change
-
     def parse_date(d_str):
         if not d_str:
             return None
@@ -260,7 +324,7 @@ def get_reports_view(page: ft.Page):
         max_amt = req.get("max_amount")
         categories = req.get("product_categories")
         product_query = req.get("product_query")
-        seller_name = req.get("seller_name")
+        text_seller_name = req.get("seller_name")
         payment_types = req.get("payment_types")
         order_statuses = req.get("order_statuses")
 
@@ -307,8 +371,11 @@ def get_reports_view(page: ft.Page):
                 if pq_low not in p_name and pq_low not in p_sku:
                     continue
 
-            if seller_name:
-                if seller_name.lower() not in s.get("seller_name", "").lower():
+            if text_seller_name:
+                if (
+                    text_seller_name.lower()
+                    not in s.get("seller_name", "").lower()
+                ):
                     continue
 
             if payment_types and s.get("payment_type") not in payment_types:
@@ -531,8 +598,8 @@ def get_reports_view(page: ft.Page):
                 for rank, (sku, rev) in enumerate(sorted_rev, 1):
                     prod = next((p for p in products if p.get("sku") == sku), None)
                     name = prod.get("name")[:30] if prod else "Неизвестный товар"
-                    pct = (rev / total_rev) * 100
-                    cum_pct += pct
+                    text_pct = (rev / total_rev) * 100
+                    cum_pct += text_pct
 
                     if cum_pct <= 80.05:
                         grp = "A (Высокая значимость)"
@@ -547,7 +614,7 @@ def get_reports_view(page: ft.Page):
                             sku,
                             name,
                             f"{rev:.2f}",
-                            f"{pct:.2f}%",
+                            f"{text_pct:.2f}%",
                             f"{min(100.0, cum_pct):.2f}%",
                             grp,
                         ]
@@ -705,12 +772,12 @@ def get_reports_view(page: ft.Page):
                 ]
                 rows = []
                 for name, stats in cat_stats.items():
-                    pct = (stats["rev"] / tot_rev * 100) if tot_rev > 0 else 0.0
+                    text_pct = (stats["rev"] / tot_rev * 100) if tot_rev > 0 else 0.0
                     rows.append(
                         [
                             name,
                             f"{stats['rev']:.2f}",
-                            f"{pct:.2f}%",
+                            f"{text_pct:.2f}%",
                             str(stats["qty"]),
                             str(stats["cnt"]),
                         ]
@@ -750,8 +817,8 @@ def get_reports_view(page: ft.Page):
                     if prev_rev is None or prev_rev == 0:
                         growth = "-"
                     else:
-                        pct = ((rev - prev_rev) / prev_rev) * 100
-                        growth = f"{'+' if pct >= 0 else ''}{pct:.1f}%"
+                        text_pct = ((rev - prev_rev) / prev_rev) * 100
+                        growth = f"{'+' if text_pct >= 0 else ''}{text_pct:.1f}%"
 
                     rows.append([m, f"{rev:.2f}", growth, str(cnt)])
                     prev_rev = rev
@@ -855,12 +922,12 @@ def get_reports_view(page: ft.Page):
                 headers = ["Тип оплаты", "Выручка", "Доля %", "Продано (шт)", "Сделок"]
                 rows = []
                 for pt, stats in pay_stats.items():
-                    pct = (stats["rev"] / tot_rev * 100) if tot_rev > 0 else 0.0
+                    text_pct = (stats["rev"] / tot_rev * 100) if tot_rev > 0 else 0.0
                     rows.append(
                         [
                             pt,
                             f"{stats['rev']:.2f}",
-                            f"{pct:.2f}%",
+                            f"{text_pct:.2f}%",
                             str(stats["qty"]),
                             str(stats["cnt"]),
                         ]
@@ -890,12 +957,10 @@ def get_reports_view(page: ft.Page):
                 rows = []
                 cum_pct = 0.0
                 for rank, (sku, cnt) in enumerate(sorted_cnt, 1):
-                    prod = font_name = next(
-                        (p for p in products if p.get("sku") == sku), None
-                    )
+                    prod = next((p for p in products if p.get("sku") == sku), None)
                     name = prod.get("name")[:30] if prod else "Неизвестный товар"
-                    pct = (cnt / tot_cnt) * 100
-                    cum_pct += pct
+                    text_pct = (cnt / tot_cnt) * 100
+                    cum_pct += text_pct
                     if cum_pct <= 80.05:
                         grp = "A (Частые сделки)"
                     elif cum_pct <= 95.05:
@@ -908,7 +973,7 @@ def get_reports_view(page: ft.Page):
                             sku,
                             name,
                             str(cnt),
-                            f"{pct:.2f}%",
+                            f"{text_pct:.2f}%",
                             f"{min(100.0, cum_pct):.2f}%",
                             grp,
                         ]
@@ -1025,9 +1090,6 @@ def get_reports_view(page: ft.Page):
                     cat_id = str(prod.get("category_id")) if prod else "Unknown"
                     cat_name = CATEGORIES.get(cat_id, {}).get("name", "Другие")
 
-                    if cat_name not in cat_stats:
-                        cat_stats[cat_name] = {"rev": 0.0, "qty": 0, "cnt": 0}
-
                     rev = float(s.get("total_amount", 0.0))
                     disc = float(s.get("discount", 0.0))
                     if disc > 0 and prod:
@@ -1078,8 +1140,8 @@ def get_reports_view(page: ft.Page):
                 rows = []
                 for cat, total in cat_total_cnt.items():
                     ret = cat_return_cnt.get(cat, 0)
-                    pct = (ret / total * 100) if total > 0 else 0.0
-                    rows.append([cat, str(total), str(ret), f"{pct:.2f}%"])
+                    text_pct = (ret / total * 100) if total > 0 else 0.0
+                    rows.append([cat, str(total), str(ret), f"{text_pct:.2f}%"])
                 rows.sort(key=lambda x: float(x[3].replace("%", "")), reverse=True)
                 out = "=== АНАЛИЗ ГАРАНТИЙНОГО РИСКА ПО КАТЕГОРИЯМ ===\n\n"
                 out += format_as_text_table(headers, rows)
@@ -1163,7 +1225,14 @@ def get_reports_view(page: ft.Page):
         content=ft.Column(
             controls=[
                 ft.Text("Генерация отчетов", size=24, weight=ft.FontWeight.BOLD),
-                dropdown,
+                ft.Row(
+                    [
+                        menu_bar,
+                        selected_report_text,
+                    ],
+                    spacing=20,
+                    vertical_alignment=ft.CrossAxisAlignment.CENTER,
+                ),
                 custom_input,
                 ft.Row(
                     [generate_btn, progress_ring, save_txt_btn, save_pdf_btn],
