@@ -47,8 +47,8 @@ jobs:
         if: matrix.name == 'windows'
         shell: pwsh
         run: |
-          # Убран флаг --add-data, который искал несуществующий site.html
-          uv run --with "flet[desktop]" --with pandas --with openpyxl --with pillow --with "pyinstaller==6.3.0" pyinstaller --noconsole --onefile --collect-all flet --collect-all flet_desktop --name "dns2-windows-app" src/main.py
+          # Добавлен флаг --with requests, чтобы исправить ошибку с изображение.png
+          uv run --with "flet[desktop]" --with pandas --with openpyxl --with pillow --with requests --with "pyinstaller==6.3.0" pyinstaller --noconsole --onefile --collect-all flet --collect-all flet_desktop --name "dns2-windows-app" src/main.py
           
           New-Item -ItemType Directory -Force -Path build
           Compress-Archive -Path dist/dns2-windows-app.exe -DestinationPath build/dns2-windows-app.zip
