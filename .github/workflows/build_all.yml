@@ -24,12 +24,10 @@ jobs:
         include:
           - name: windows
             runner: windows-latest
-            build_cmd: "flet build windows src -o build/windows"
             artifact_path: build/dns2-windows-app.zip
 
           - name: apk
             runner: ubuntu-latest
-            build_cmd: "flet build apk src -o build/apk"
             artifact_path: build/dns2-android-app.apk
 
     steps:
@@ -45,16 +43,20 @@ jobs:
       - name: Настройка uv
         uses: astral-sh/setup-uv@v6
 
-      - name: Запуск сборки приложения
-        shell: bash
-        run: |
-          uv run --with flet --with requests ${{ matrix.build_cmd }} --yes --verbose
-
-      - name: Упаковка Windows в ZIP
+      - name: Сборка Windows (PyInstaller)
         if: matrix.name == 'windows'
         shell: pwsh
         run: |
-          Compress-Archive -Path build/windows -DestinationPath build/dns2-windows-app.zip
+          uv run --with "flet[desktop]" --with pandas --with openpyxl --with "pyinstaller==6.3.0" pyinstaller --noconsole --onefile --collect-all flet --collect-all flet_desktop --add-data "site.html;." --name "dns2-windows-app" main.py
+          
+          New-Item -ItemType Directory -Force -Path build
+          Compress-Archive -Path dist/dns2-windows-app.exe -DestinationPath build/dns2-windows-app.zip
+
+      - name: Сборка Android (Flet CLI)
+        if: matrix.name == 'apk'
+        shell: bash
+        run: |
+          uv run --with flet --with requests flet build apk src -o build/apk --yes --verbose
 
       - name: Переименование APK
         if: matrix.name == 'apk'
