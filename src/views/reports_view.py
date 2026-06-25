@@ -3,6 +3,8 @@ import math
 import os
 import threading
 import unicodedata
+import base64
+import time
 from datetime import datetime
 from backend.api import load_all_data_if_needed, parse_nlp_query
 
@@ -42,11 +44,11 @@ def show_snack(page: ft.Page, text: str, color_hex: str):
         elif hasattr(page, "show_dialog"):
             page.show_dialog(snack)
         else:
-            page.snack_bar = snack
+            page.overlay.append(snack)
             snack.open = True
             page.update()
-    except Exception as ex:
-        print(f"Failed to show SnackBar: {ex}")
+    except Exception:
+        pass
 
 
 def visual_len(text):
@@ -80,50 +82,57 @@ def format_as_text_table(headers, rows):
     return f"{header_line}\n{separator}\n" + "\n".join(data_lines)
 
 
+def get_downloads_folder(page: ft.Page):
+    platform_str = str(getattr(page, "platform", "")).lower()
+    if "android" in platform_str:
+        return "/storage/emulated/0/Download"
+    elif "ios" in platform_str:
+        return os.path.expanduser("~")
+    if os.name == "nt":
+        return os.path.join(
+            os.environ.get("USERPROFILE", os.path.expanduser("~")), "Downloads"
+        )
+    return os.path.join(os.path.expanduser("~"), "Downloads")
+
+
 def save_as_txt(file_path: str, text_content: str):
     with open(file_path, "w", encoding="utf-8") as f:
         f.write(text_content)
 
 
-def save_as_pdf(file_path: str, text_content: str):
+def generate_pdf_bytes(text_content: str) -> bytes:
     from fpdf import FPDF
 
     pdf = FPDF()
     pdf.add_page()
-
     font_file = os.path.join(
         os.path.dirname(os.path.dirname(__file__)), "assets", "Consolas.ttf"
     )
     font_name = "ConsolasMono"
-
     if os.path.exists(font_file):
         pdf.add_font(font_name, style="", fname=font_file)
         pdf.set_font(font_name, size=9)
     else:
         pdf.set_font("helvetica", size=9)
-
     for line in text_content.split("\n"):
         try:
             pdf.cell(0, 5, text=line, ln=True)
         except Exception:
             safe_line = line.encode("ascii", "ignore").decode("ascii")
             pdf.cell(0, 5, text=safe_line, ln=True)
+    try:
+        out = pdf.output(dest="S")
+    except Exception:
+        out = pdf.output()
+    if isinstance(out, str):
+        return out.encode("latin1", "replace")
+    return bytes(out)
 
-    pdf.output(file_path)
 
-
-class MenuDropdownHolder:
-    def __init__(self, menu_control):
-        self.value = None
-        self.menu_control = menu_control
-
-    @property
-    def disabled(self):
-        return self.menu_control.disabled
-
-    @disabled.setter
-    def disabled(self, val):
-        self.menu_control.disabled = val
+def save_as_pdf(file_path: str, text_content: str):
+    data = generate_pdf_bytes(text_content)
+    with open(file_path, "wb") as f:
+        f.write(data)
 
 
 def get_reports_view(page: ft.Page):
@@ -132,94 +141,93 @@ def get_reports_view(page: ft.Page):
     page.fonts["CyrillicMono"] = "Consolas.ttf"
     page.update()
 
-    report_structure = {
-        "Анализ продаж и спроса": [
+    categories_structure = {
+        "Анализ продаж": [
             "1. ABC-анализ продаж (по выручке)",
-            "2. XYZ-анализ стабильности спроса",
             "4. Анализ продаж по категориям товаров",
             "5. Динамика продаж по месяцам",
             "9. ABC-анализ по количеству сделок",
             "11. Продажи по дням недели",
             "15. Топ-10 самых дорогих единичных продаж",
         ],
-        "Финансы и эффективность": [
-            "3. Рейтинг эффективности продавцов",
+        "Финансовый анализ": [
             "6. Анализ прибыльности по брендам",
-            "7. Анализ возвратов и отмен",
             "8. Популярность типов оплаты",
             "10. Анализ ценовых диапазонов",
             "13. Анализ скидок и упущенной выгоды",
+        ],
+        "Эффективность и риски": [
+            "2. XYZ-анализ стабильности спроса",
+            "3. Рейтинг эффективности продавцов",
+            "7. Анализ возвратов и отмен",
             "14. Анализ гарантийного риска (Возвраты по категориям)",
         ],
-        "Склад и ИИ": [
+        "Склад и запасы": [
             "12. Товары с критически низким запасом",
+        ],
+        "Интеллектуальный поиск": [
             "Свой вариант...",
         ],
     }
 
     last_report_text = [""]
-
-    selected_report_text = ft.Text(
-        "Отчет не выбран", size=14, color="#A0A0A0", weight=ft.FontWeight.W_500
-    )
+    selected_report = [""]
 
     custom_input = ft.TextField(
         visible=False,
-        width=600,
         hint_text="Например: 'Какой продавец продал больше всего видеокарт в декабре?'",
         border_color="#333333",
+        multiline=True,
+        min_lines=1,
+        max_lines=3,
     )
 
-    def on_menu_item_click(e):
-        chosen = e.control.data
-        dropdown.value = chosen
-        selected_report_text.value = f"Выбран: {chosen}"
-        selected_report_text.color = "#FFFFFF"
-        custom_input.visible = chosen == "Свой вариант..."
+    report_label = ft.Text(
+        "Отчет не выбран",
+        color="#B0B0B0",
+        size=13,
+        weight=ft.FontWeight.BOLD,
+        no_wrap=False,
+    )
+
+    def handle_report_select(e):
+        val = e.control.content.value
+        selected_report[0] = val
+        report_label.value = f"Выбран: {val}"
+        custom_input.visible = val == "Свой вариант..."
+        report_label.update()
+        custom_input.update()
         page.update()
 
-    menu_items_sales = [
-        ft.MenuItemButton(
-            content=ft.Text(opt), on_click=on_menu_item_click, data=opt
+    submenu_controls = []
+    for cat_name, reports in categories_structure.items():
+        menu_items = []
+        for r in reports:
+            menu_items.append(
+                ft.MenuItemButton(
+                    content=ft.Text(r),
+                    on_click=handle_report_select,
+                )
+            )
+        submenu_controls.append(
+            ft.SubmenuButton(
+                content=ft.Text(cat_name),
+                controls=menu_items,
+            )
         )
-        for opt in report_structure["Анализ продаж и спроса"]
-    ]
-    menu_items_finance = [
-        ft.MenuItemButton(
-            content=ft.Text(opt), on_click=on_menu_item_click, data=opt
-        )
-        for opt in report_structure["Финансы и эффективность"]
-    ]
-    menu_items_stock = [
-        ft.MenuItemButton(
-            content=ft.Text(opt), on_click=on_menu_item_click, data=opt
-        )
-        for opt in report_structure["Склад и ИИ"]
-    ]
 
     menu_bar = ft.MenuBar(
-        expand=False,
+        style=ft.MenuStyle(
+            alignment=ft.Alignment.CENTER_LEFT,
+        ),
         controls=[
             ft.SubmenuButton(
-                content=ft.Text("Открыть список отчетов", color="#FFFFFF"),
-                controls=[
-                    ft.SubmenuButton(
-                        content=ft.Text("Анализ продаж и спроса"),
-                        controls=menu_items_sales,
-                    ),
-                    ft.SubmenuButton(
-                        content=ft.Text("Финансы и эффективность"),
-                        controls=menu_items_finance,
-                    ),
-                    ft.SubmenuButton(
-                        content=ft.Text("Склад и ИИ"), controls=menu_items_stock
-                    ),
-                ],
+                content=ft.Text(" Выбрать тип отчета... ", weight=ft.FontWeight.W_500),
+                leading=ft.Icon(ft.Icons.MENU_OPEN),
+                controls=submenu_controls,
             )
         ],
     )
-
-    dropdown = MenuDropdownHolder(menu_bar)
 
     generate_btn = ft.ElevatedButton(
         "Составить отчет",
@@ -239,53 +247,62 @@ def get_reports_view(page: ft.Page):
         text_style=ft.TextStyle(font_family="CyrillicMono", color="#E0E0E0"),
     )
 
-    file_picker = ft.FilePicker()
-    if hasattr(page, "services"):
-        page.services.append(file_picker)
-    else:
+    def on_save_txt_click(e):
+        if not last_report_text[0]:
+            show_snack(page, "Сначала составьте отчет!", "#D32F2F")
+            return
+
+        txt_content = last_report_text[0]
+        is_web = getattr(page, "web", False)
+        if is_web:
+            try:
+                b64 = base64.b64encode(txt_content.encode("utf-8")).decode("utf-8")
+                uri = f"data:text/plain;charset=utf-8;base64,{b64}"
+                page.launch_url(uri)
+                show_snack(page, "TXT скачивается...", "#388E3C")
+            except Exception as ex:
+                show_snack(page, f"Ошибка: {ex}", "#D32F2F")
+            return
+
+        filename = f"report_{int(time.time())}.txt"
+        save_dir = get_downloads_folder(page)
         try:
-            page._services.append(file_picker)
-        except:
-            try:
-                page.overlay.append(file_picker)
-            except:
-                pass
+            if not os.path.exists(save_dir):
+                os.makedirs(save_dir, exist_ok=True)
+            path = os.path.join(save_dir, filename)
+            save_as_txt(path, txt_content)
+            show_snack(page, f"TXT сохранен: {path}", "#388E3C")
+        except Exception as ex:
+            show_snack(page, f"Ошибка сохранения: {ex}", "#D32F2F")
 
-    async def on_save_txt_click(e):
+    def on_save_pdf_click(e):
         if not last_report_text[0]:
             show_snack(page, "Сначала составьте отчет!", "#D32F2F")
             return
-        path = await file_picker.save_file(
-            dialog_title="Сохранить как TXT",
-            file_name="report.txt",
-            allowed_extensions=["txt"],
-        )
-        if path:
-            if not path.lower().endswith(".txt"):
-                path += ".txt"
-            try:
-                save_as_txt(path, last_report_text[0])
-                show_snack(page, f"TXT сохранен: {path}", "#388E3C")
-            except Exception as ex:
-                show_snack(page, f"Ошибка сохранения TXT: {ex}", "#D32F2F")
 
-    async def on_save_pdf_click(e):
-        if not last_report_text[0]:
-            show_snack(page, "Сначала составьте отчет!", "#D32F2F")
-            return
-        path = await file_picker.save_file(
-            dialog_title="Сохранить как PDF",
-            file_name="report.pdf",
-            allowed_extensions=["pdf"],
-        )
-        if path:
-            if not path.lower().endswith(".pdf"):
-                path += ".pdf"
+        txt_content = last_report_text[0]
+        is_web = getattr(page, "web", False)
+        if is_web:
             try:
-                save_as_pdf(path, last_report_text[0])
-                show_snack(page, f"PDF сохранен: {path}", "#388E3C")
+                pdf_bytes = generate_pdf_bytes(txt_content)
+                b64 = base64.b64encode(pdf_bytes).decode("utf-8")
+                uri = f"data:application/pdf;base64,{b64}"
+                page.launch_url(uri)
+                show_snack(page, "PDF скачивается...", "#388E3C")
             except Exception as ex:
-                show_snack(page, f"Ошибка сохранения PDF: {ex}", "#D32F2F")
+                show_snack(page, f"Ошибка PDF: {ex}", "#D32F2F")
+            return
+
+        filename = f"report_{int(time.time())}.pdf"
+        save_dir = get_downloads_folder(page)
+        try:
+            if not os.path.exists(save_dir):
+                os.makedirs(save_dir, exist_ok=True)
+            path = os.path.join(save_dir, filename)
+            save_as_pdf(path, txt_content)
+            show_snack(page, f"PDF сохранен: {path}", "#388E3C")
+        except Exception as ex:
+            show_snack(page, f"Ошибка сохранения PDF: {ex}", "#D32F2F")
 
     save_txt_btn = ft.IconButton(
         icon=ft.Icons.SAVE_ALT,
@@ -372,10 +389,7 @@ def get_reports_view(page: ft.Page):
                     continue
 
             if text_seller_name:
-                if (
-                    text_seller_name.lower()
-                    not in s.get("seller_name", "").lower()
-                ):
+                if text_seller_name.lower() not in s.get("seller_name", "").lower():
                     continue
 
             if payment_types and s.get("payment_type") not in payment_types:
@@ -560,7 +574,7 @@ def get_reports_view(page: ft.Page):
                 report_output.update()
                 return
 
-            choice = dropdown.value
+            choice = selected_report[0]
             if not choice:
                 report_output.value = "Пожалуйста, выберите тип отчета."
                 report_output.update()
@@ -1204,14 +1218,18 @@ def get_reports_view(page: ft.Page):
         finally:
             progress_ring.visible = False
             generate_btn.disabled = False
-            dropdown.disabled = False
+            menu_bar.disabled = False
             custom_input.disabled = False
+            report_output.update()
             page.update()
 
     def on_generate(e):
+        if not selected_report[0]:
+            show_snack(page, "Сначала выберите тип отчета!", "#D32F2F")
+            return
         progress_ring.visible = True
         generate_btn.disabled = True
-        dropdown.disabled = True
+        menu_bar.disabled = True
         custom_input.disabled = True
         page.update()
 
@@ -1223,23 +1241,30 @@ def get_reports_view(page: ft.Page):
         expand=True,
         padding=20,
         content=ft.Column(
+            expand=True,
             controls=[
                 ft.Text("Генерация отчетов", size=24, weight=ft.FontWeight.BOLD),
                 ft.Row(
                     [
                         menu_bar,
-                        selected_report_text,
+                        ft.Container(
+                            content=report_label,
+                            padding=ft.Padding.only(left=5, top=2, bottom=2),
+                        ),
                     ],
-                    spacing=20,
+                    spacing=10,
                     vertical_alignment=ft.CrossAxisAlignment.CENTER,
+                    wrap=True,
                 ),
                 custom_input,
                 ft.Row(
                     [generate_btn, progress_ring, save_txt_btn, save_pdf_btn],
                     spacing=15,
+                    vertical_alignment=ft.CrossAxisAlignment.CENTER,
+                    wrap=True,
                 ),
-                ft.Divider(height=20, color=ft.Colors.TRANSPARENT),
+                ft.Divider(height=10, color=ft.Colors.TRANSPARENT),
                 report_output,
-            ]
+            ],
         ),
     )

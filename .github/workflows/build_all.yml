@@ -24,7 +24,7 @@ jobs:
         include:
           - name: windows
             runner: windows-latest
-            artifact_path: build/dns2-windows-app.zip
+            artifact_path: dist/dns2-windows-app.exe
 
           - name: apk
             runner: ubuntu-latest
@@ -47,11 +47,9 @@ jobs:
         if: matrix.name == 'windows'
         shell: pwsh
         run: |
-          # Добавлен флаг --with requests, чтобы исправить ошибку с изображение.png
+          # Собираем бинарник
           uv run --with "flet[desktop]" --with pandas --with openpyxl --with pillow --with requests --with "pyinstaller==6.3.0" pyinstaller --noconsole --onefile --collect-all flet --collect-all flet_desktop --name "dns2-windows-app" src/main.py
-          
-          New-Item -ItemType Directory -Force -Path build
-          Compress-Archive -Path dist/dns2-windows-app.exe -DestinationPath build/dns2-windows-app.zip
+          # Шаг архивации Compress-Archive полностью удален
 
       - name: Сборка Android (Flet CLI)
         if: matrix.name == 'apk'
@@ -87,7 +85,7 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           files: |
-            dns2-windows-app.zip
+            dns2-windows-app.exe
             dns2-android-app.apk
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
