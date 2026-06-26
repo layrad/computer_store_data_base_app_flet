@@ -1233,7 +1233,7 @@ def get_reports_view(page: ft.Page):
         custom_input.disabled = True
         page.update()
 
-        threading.Thread(target=on_generate_thread, daemon=True).start()
+        on_generate_thread()
 
     generate_btn.on_click = on_generate
 
